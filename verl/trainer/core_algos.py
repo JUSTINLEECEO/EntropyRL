@@ -21,7 +21,7 @@ implement PPO
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Dict, Literal, Tuple
 
 import numpy as np
 import torch
@@ -64,7 +64,7 @@ class AdaptiveKLController(KLController):
 class FixedKLController(KLController):
     """Fixed KL controller.
 
-    Copeid from https://github.com/huggingface/trl/blob/v0.11.0/trl/trainer/utils.py#L72"""
+    Copied from https://github.com/huggingface/trl/blob/v0.11.0/trl/trainer/utils.py#L72"""
 
     def __init__(self, init_kl_coef: float):
         self.kl_coef = init_kl_coef
@@ -85,9 +85,6 @@ class AdvantageEstimator(str, Enum):
     RLOO = "rloo"
 
 
-ADV_ESTIMATOR_MAP: dict[str, Any] = {}
-
-
 def get_kl_controller(algorithm_config: "AlgorithmConfig") -> KLController:
     """Adapted from https://github.com/huggingface/trl/blob/v0.11.0/trl/trainer/ppo_trainer.py#L319"""
     if algorithm_config.kl_type == "fixed":
@@ -105,31 +102,14 @@ def get_kl_controller(algorithm_config: "AlgorithmConfig") -> KLController:
     return kl_ctrl
 
 
-def register_adv_estimator(name: AdvantageEstimator):
-    """Decorator to register a advantage estimator function with a given name."""
-
-    def decorator(fn):
-        wrapped_fn = torch.no_grad()(fn)
-        ADV_ESTIMATOR_MAP[getattr(name, "value", name)] = wrapped_fn
-        return wrapped_fn
-
-    return decorator
-
-
-def compute_advantage_return(name: AdvantageEstimator, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
-    """Compute advantage and return for a given advantage estimator."""
-    return ADV_ESTIMATOR_MAP[getattr(name, "value", name)](**kwargs)
-
-
-@register_adv_estimator(AdvantageEstimator.GAE)
+@torch.no_grad()
 def compute_gae_advantage_return(
     token_level_rewards: torch.Tensor,
     values: torch.Tensor,
     response_mask: torch.Tensor,
     gamma: torch.Tensor,
     lam: torch.Tensor,
-    **kwargs,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Adapted from https://github.com/huggingface/trl/blob/v0.16.0/trl/trainer/ppo_trainer.py#L513
 
     Args:
@@ -167,12 +147,13 @@ def compute_gae_advantage_return(
 
 
 # NOTE(sgm): this implementation only consider outcome supervision, where the reward is a scalar.
-@register_adv_estimator(AdvantageEstimator.GRPO)
+@torch.no_grad()
 def compute_grpo_outcome_advantage(
-    token_level_rewards: torch.Tensor, response_mask: torch.Tensor, index: torch.Tensor, eps: float = 1e-6, **kwargs
-) -> tuple[torch.Tensor, torch.Tensor]:
+    token_level_rewards: torch.Tensor, response_mask: torch.Tensor, index: torch.Tensor, eps: float = 1e-6
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Compute advantage for GRPO, operating only on Outcome reward (with only one scalar reward for each response).
+    Compute advantage for GRPO, operating only on Outcome reward
+    (with only one scalar reward for each response).
 
     Args:
         token_level_rewards: `(torch.Tensor)`
@@ -211,10 +192,10 @@ def compute_grpo_outcome_advantage(
     return returns, returns
 
 
-@register_adv_estimator(AdvantageEstimator.RLOO)
+@torch.no_grad()
 def compute_rloo_outcome_advantage(
-    token_level_rewards: torch.Tensor, response_mask: torch.Tensor, index: torch.Tensor, **kwargs
-) -> tuple[torch.Tensor, torch.Tensor]:
+    token_level_rewards: torch.Tensor, response_mask: torch.Tensor, index: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Compute advantage for RLOO based on https://arxiv.org/abs/2402.14740
 
@@ -254,10 +235,10 @@ def compute_rloo_outcome_advantage(
     return returns, returns
 
 
-@register_adv_estimator(AdvantageEstimator.REINFORCE_PLUS_PLUS)
+@torch.no_grad()
 def compute_reinforce_plus_plus_outcome_advantage(
-    token_level_rewards: torch.Tensor, response_mask: torch.Tensor, gamma: torch.Tensor, **kwargs
-) -> tuple[torch.Tensor, torch.Tensor]:
+    token_level_rewards: torch.Tensor, response_mask: torch.Tensor, gamma: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Compute advantage for REINFORCE++.
     This implementation is based on the paper: https://arxiv.org/abs/2501.03262
@@ -287,10 +268,10 @@ def compute_reinforce_plus_plus_outcome_advantage(
     return advantages, returns
 
 
-@register_adv_estimator(AdvantageEstimator.REMAX)
+@torch.no_grad()
 def compute_remax_outcome_advantage(
-    token_level_rewards: torch.Tensor, reward_baselines: torch.Tensor, response_mask: torch.Tensor, **kwargs
-) -> tuple[torch.Tensor, torch.Tensor]:
+    token_level_rewards: torch.Tensor, reward_baselines: torch.Tensor, response_mask: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Compute advantage for ReMax, operating only on Outcome reward
     This implementation is based on the paper: https://arxiv.org/abs/2310.10505
@@ -362,7 +343,7 @@ def compute_policy_loss(
     clip_ratio_high: float,
     clip_ratio_dual: float,
     loss_avg_mode: Literal["token", "seq"],
-) -> tuple[torch.Tensor, dict[str, float]]:
+) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Compute the clipped policy objective and related metrics for PPO.
 
     Adapted from https://github.com/huggingface/trl/blob/v0.15.0/trl/trainer/ppo_trainer.py#L568
@@ -414,6 +395,9 @@ def compute_policy_loss(
     # use negative log probs as an estimator of entropy loss
     metrics["entropy_loss"] = average_loss(-log_probs, response_mask, mode=loss_avg_mode)
 
+    # adding policy entropy to the metrics
+    metrics["policy_entropy"] = VF.masked_mean(-log_probs * torch.exp(log_probs), response_mask).detach().item()
+
     pg_loss = -advantages * ratio  # -ratio * A
     pg_loss2 = -advantages * clipped_ratio  # -clip(ratio, 1-clip_low, 1+clip_high) * A
     pg_loss3 = -advantages * clip_ratio_dual  # -clip_dual * A
@@ -436,7 +420,7 @@ def compute_value_loss(
     response_mask: torch.Tensor,
     cliprange_value: float,
     loss_avg_mode: Literal["token", "seq"],
-) -> tuple[torch.Tensor, dict[str, float]]:
+) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Compute the value loss.
 
     Adapted from https://github.com/huggingface/trl/blob/v0.15.0/trl/trainer/ppo_trainer.py#L556

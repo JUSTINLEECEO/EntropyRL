@@ -4,7 +4,7 @@ set -x
 
 export PYTHONUNBUFFERED=1
 
-MODEL_PATH=Qwen/Qwen2.5-VL-3B-Instruct  # replace it with your local file path
+MODEL_PATH=/share/liyilin-nfs/models/Qwen2.5-VL-3B-Instruct
 
 python3 -m verl.trainer.main \
     config=examples/config.yaml \
