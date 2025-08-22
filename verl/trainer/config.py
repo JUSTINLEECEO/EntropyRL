@@ -109,7 +109,7 @@ class TrainerConfig:
     """total epochs for training"""
     max_steps: Optional[int] = None
     """max steps for training, if specified, total_epochs is ignored"""
-    project_name: str = "easy_r1"
+    project_name: str = "EntropyRL"
     """project name for logger"""
     experiment_name: str = "demo"
     """experiment name for logger"""
@@ -143,6 +143,8 @@ class TrainerConfig:
     """load checkpoint path"""
     find_last_checkpoint: bool = True
     """automatically find the last checkpoint in the save checkpoint path to resume training"""
+    save_debug_path: Optional[str] = None
+    """save debug path, if not specified, then not debugging"""
 
     def post_init(self):
         if self.save_checkpoint_path is None:

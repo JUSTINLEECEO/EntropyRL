@@ -394,7 +394,6 @@ def compute_policy_loss(
     metrics = {"ppo_kl": -negative_approx_kl}
     # use negative log probs as an estimator of entropy loss
     metrics["entropy_loss"] = average_loss(-log_probs, response_mask, mode=loss_avg_mode)
-
     # adding policy entropy to the metrics
     metrics["policy_entropy"] = VF.masked_mean(-log_probs * torch.exp(log_probs), response_mask).detach().item()
 

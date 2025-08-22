@@ -213,23 +213,15 @@ class RayPPOTrainer:
         if config.data.rollout_batch_size % config.worker.actor.global_batch_size != 0:
             raise ValueError("Rollout batch size must be divisible by actor global batch size.")
 
-        if (
-            config.data.rollout_batch_size * config.worker.rollout.n
-        ) % config.worker.actor.micro_batch_size_per_device_for_experience != 0:
-            raise ValueError(
-                "Rollout batch size * rollout.n must be divisible by actor micro batch size for experience."
-            )
+        if (config.data.rollout_batch_size * config.worker.rollout.n) % config.worker.actor.micro_batch_size_per_device_for_experience != 0:
+            raise ValueError("Rollout batch size * rollout.n must be divisible by actor micro batch size for experience.")
 
         if self.use_critic:
             if config.data.rollout_batch_size % config.worker.critic.global_batch_size != 0:
                 raise ValueError("Rollout batch size must be divisible by critic global batch size.")
 
-            if (
-                config.data.rollout_batch_size * config.worker.rollout.n
-            ) % config.worker.critic.micro_batch_size_per_device_for_experience != 0:
-                raise ValueError(
-                    "Rollout batch size * rollout.n must be divisible by critic micro batch size for experience."
-                )
+            if (config.data.rollout_batch_size * config.worker.rollout.n) % config.worker.critic.micro_batch_size_per_device_for_experience != 0:
+                raise ValueError("Rollout batch size * rollout.n must be divisible by critic micro batch size for experience.")
 
         if (
             config.algorithm.adv_estimator in (AdvantageEstimator.GRPO, AdvantageEstimator.RLOO)
@@ -424,11 +416,26 @@ class RayPPOTrainer:
             input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
             output_ids = test_batch.batch["responses"]
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
+            ground_truths = test_batch.non_tensor_batch["ground_truth"]
             scores = reward_tensor.sum(-1).cpu().tolist()
             sample_inputs.extend(input_texts)
             sample_outputs.extend(output_texts)
-            sample_labels.extend(test_batch.non_tensor_batch["ground_truth"].tolist())
+            sample_labels.extend(ground_truths.tolist())
             sample_scores.extend(scores)
+
+            # save the validating generation for debugging
+            if self.config.trainer.save_debug_path:
+                print("Saving validation debug prompts, answers, and ground truths...\n")
+                if not os.path.exists(self.config.trainer.save_debug_path):
+                    os.makedirs(self.config.trainer.save_debug_path)
+                debug_file_path = os.path.join(self.config.trainer.save_debug_path, f"debug_prompts_answers.txt")
+                with open(debug_file_path, "a") as debug_file:
+                    debug_file.write(f"{'<' * 30}Validation{'>' * 30}\n")
+                    debug_file.write(f"Batch size: {len(test_batch.batch)}\n\n")
+                    debug_file.write(f"[Prompts, answers, and ground truths]\n")
+                    for prompt, answer, ground_truth in zip(input_texts[:3], output_texts[:3], ground_truths[:3]):  # only record the first 3 samples
+                        debug_file.write(f"[Prompt]\n {prompt}\n\n[Answer]\n {answer}\n\n[Ground Truth]\n {ground_truth}\n\n")
+                        debug_file.write(f"{'-' * 60}\n")
 
             reward_tensor_lst.append(reward_tensor)
             for key, value in reward_metrics.items():
@@ -491,6 +498,23 @@ class RayPPOTrainer:
 
             # generate a batch
             gen_batch_output = self.actor_rollout_ref_wg.generate_sequences(gen_batch)
+
+            # save the training generation for debugging
+            if self.config.trainer.save_debug_path:
+                if not os.path.exists(self.config.trainer.save_debug_path):
+                    os.makedirs(self.config.trainer.save_debug_path)
+                prompts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in gen_batch.batch["input_ids"]]
+                answers = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in gen_batch_output.batch["responses"]]
+                ground_truths = new_batch.non_tensor_batch["ground_truth"]
+                debug_file_path = os.path.join(self.config.trainer.save_debug_path, f"debug_prompts_answers.txt")
+                with open(debug_file_path, "a") as debug_file:
+                    debug_file.write(f"{'<' * 30}Training{'>' * 30}\n")
+                    debug_file.write(f"Training step: {self.global_step}\n")
+                    debug_file.write(f"Batch size: {len(gen_batch_output.batch)}\n\n")
+                    debug_file.write(f"[Prompts, answers, and ground truths]\n")
+                    for prompt, answer, ground_truth in zip(prompts[:3], answers[:3], ground_truths[:3]):  # only record the first 3 samples
+                        debug_file.write(f"[Prompt]\n {prompt}\n\n[Answer]\n {answer}\n\n[Ground Truth]\n {ground_truth}\n\n")
+                        debug_file.write(f"{'-' * 60}\n")
 
             if self.config.algorithm.adv_estimator == "remax":
                 gen_baseline_batch = deepcopy(gen_batch)

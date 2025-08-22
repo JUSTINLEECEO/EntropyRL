@@ -68,7 +68,7 @@ worker:
     enforce_eager: false
     enable_chunked_prefill: false
     tensor_parallel_size: 2
-    disable_tqdm: false
+    disable_tqdm: false # original: false
     val_override_config:
       temperature: 0.6
       top_p: 0.95
@@ -89,9 +89,9 @@ worker:
 trainer:
   total_epochs: 15
   max_steps: null
-  project_name: easy_r1
-  experiment_name: qwen2_5_7b_math_grpo
-  logger: ["console", "wandb"]
+  project_name: EntropyRL
+  experiment_name: qwen2_5_7b_math_grpo  # original: qwen2_5_7b_math_grpo
+  logger: ["console"]  # original: ["console", "wandb"]
   nnodes: 1
   n_gpus_per_node: 8
   max_try_make_batch: 20  # -1 means no limit
@@ -105,3 +105,4 @@ trainer:
   save_checkpoint_path: null
   load_checkpoint_path: null
   find_last_checkpoint: true
+  save_debug_path: ./debug  # save debug path for prompts & answers & ground truths, if not specified, then not debugging  original: ./debug

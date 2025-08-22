@@ -186,3 +186,4 @@ images*
 # logs
 nohup.out
 nohup/
+debug/
