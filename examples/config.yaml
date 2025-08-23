@@ -1,6 +1,6 @@
 data:
-  train_files: hiyouga/math12k@train
-  val_files: hiyouga/math12k@test
+  train_files: JustinLeeCEO/geometry3k@train
+  val_files: JustinLeeCEO/geometry3k@test
   prompt_key: problem
   answer_key: answer
   image_key: images
@@ -105,4 +105,4 @@ trainer:
   save_checkpoint_path: null
   load_checkpoint_path: null
   find_last_checkpoint: true
-  save_debug_path: ./debug  # save debug path for prompts & answers & ground truths, if not specified, then not debugging  original: ./debug
+  save_debug_path: null  # save debug path for prompts & answers & ground truths, if not specified, then not debugging  original: ./debug
