@@ -265,6 +265,7 @@ class DataParallelPPOActor(BasePPOActor):
                         clip_ratio_high=self.config.clip_ratio_high,
                         clip_ratio_dual=self.config.clip_ratio_dual,
                         loss_avg_mode=self.config.loss_avg_mode,
+                        entropy_coef=self.config.entropy_coef,
                     )
                     if self.config.use_kl_loss and "ref_log_probs" in model_inputs:
                         ref_log_probs = model_inputs["ref_log_probs"]

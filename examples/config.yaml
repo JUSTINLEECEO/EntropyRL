@@ -40,6 +40,7 @@ worker:
     padding_free: true
     dynamic_batching: true
     ulysses_size: 1
+    entropy_coef: 0.01  # Coefficient for entropy regularization, original: 0.0
     model:
       model_path: Qwen/Qwen2.5-7B-Instruct
       enable_gradient_checkpointing: true
@@ -91,7 +92,7 @@ trainer:
   max_steps: null
   project_name: EntropyRL
   experiment_name: qwen2_5_7b_math_grpo  # original: qwen2_5_7b_math_grpo
-  logger: ["console"]  # original: ["console", "wandb"]
+  logger: ["console", "wandb"]  # original: ["console", "wandb"]
   nnodes: 1
   n_gpus_per_node: 8
   max_try_make_batch: 20  # -1 means no limit

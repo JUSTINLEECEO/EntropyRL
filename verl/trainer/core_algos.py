@@ -343,6 +343,7 @@ def compute_policy_loss(
     clip_ratio_high: float,
     clip_ratio_dual: float,
     loss_avg_mode: Literal["token", "seq"],
+    entropy_coef: float,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Compute the clipped policy objective and related metrics for PPO.
 
@@ -393,7 +394,8 @@ def compute_policy_loss(
     # pg metrics
     metrics = {"ppo_kl": -negative_approx_kl}
     # use negative log probs as an estimator of entropy loss
-    metrics["entropy_loss"] = average_loss(-log_probs, response_mask, mode=loss_avg_mode)
+    entropy_loss = average_loss(-log_probs, response_mask, mode=loss_avg_mode)
+    metrics["entropy_loss"] = entropy_loss.detach().item()
     # adding policy entropy to the metrics
     metrics["policy_entropy"] = VF.masked_mean(-log_probs * torch.exp(log_probs), response_mask).detach().item()
 
@@ -407,7 +409,10 @@ def compute_policy_loss(
     final_pg_loss = torch.where(advantages < 0, clipped_pg_loss_lower, clipped_pg_loss_higher)
     metrics["pg_clipfrac_lower"] = (clipped_pg_loss_higher > pg_loss3).float() * (advantages < 0).float()
 
+    # Combine policy gradient loss with entropy regularization
     final_pg_loss = average_loss(final_pg_loss, response_mask, mode=loss_avg_mode)
+    final_pg_loss += entropy_coef * entropy_loss
+
     metrics = {k: VF.masked_mean(v, response_mask).detach().item() for k, v in metrics.items()}
     return final_pg_loss, metrics
 

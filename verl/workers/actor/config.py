@@ -102,6 +102,8 @@ class ActorConfig:
     """ulysses sequence parallel size"""
     use_torch_compile: bool = True
     """enable torch compile"""
+    entropy_coef: float = 0.0
+    """Coefficient for entropy regularization"""
     model: ModelConfig = field(default_factory=ModelConfig)
     optim: OptimConfig = field(default_factory=OptimConfig)
     fsdp: FSDPConfig = field(default_factory=FSDPConfig)
