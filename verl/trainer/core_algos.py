@@ -343,7 +343,7 @@ def compute_policy_loss(
     clip_ratio_high: float,
     clip_ratio_dual: float,
     loss_avg_mode: Literal["token", "seq"],
-    entropy_coef: float,
+    entropy_coef: float
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Compute the clipped policy objective and related metrics for PPO.
 

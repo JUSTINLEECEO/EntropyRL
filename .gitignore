@@ -187,3 +187,6 @@ images*
 nohup.out
 nohup/
 debug/
+
+# test scripts
+testing/
