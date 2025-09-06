@@ -309,7 +309,7 @@ def print_metrics(hallucination_cap_dict, quiet=False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--cap_file", type=str, default='')
-    parser.add_argument("--annotation_path", type=str, default='coco/annotations')
+    parser.add_argument("--annotation_path", type=str, default='/share/liyilin-nfs/datasets/MSCOCO/annotations')
     args = parser.parse_args()
 
     _, imids, _ = load_generated_captions(args.cap_file)

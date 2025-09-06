@@ -190,3 +190,7 @@ debug/
 
 # test scripts
 testing/
+test.py
+
+# md files
+MDs/
