@@ -66,8 +66,8 @@ class Spice:
         cache_dir=os.path.join(cwd, CACHE_DIR)
         if not os.path.exists(cache_dir):
           os.makedirs(cache_dir)
-        spice_cmd = ['java', '-jar', '-Xmx8G', SPICE_JAR, in_file.name,
-          '-cache', cache_dir,
+        spice_cmd = ['java', '-jar', '-Xmx2048m', SPICE_JAR, in_file.name,
+        #  '-cache', cache_dir,    # not using cache
           '-out', out_file.name,
           '-subset',
           '-silent'

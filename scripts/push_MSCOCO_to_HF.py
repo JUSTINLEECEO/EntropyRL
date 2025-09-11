@@ -25,10 +25,8 @@ def generate_train_data(data_path: str, instances: dict, captions: dict):
             yield {
                 "images": [image],
                 "problem": "<image>Provide a brief description of the given image.",
-                "answer": {
-                    "instances": img_instances,
-                    "captions": img_captions
-                },
+                "answer": img_captions,
+                "instances": img_instances
             }
 
 def generate_val_data(data_path: str, instances: dict, captions: dict):
@@ -41,10 +39,8 @@ def generate_val_data(data_path: str, instances: dict, captions: dict):
         yield {
             "images": [image],
             "problem": "<image>Provide a brief description of the given image.",
-            "answer": {
-                "instances": img_instances,
-                "captions": img_captions
-            },
+            "answer": img_captions,
+            "instances": img_instances
         }
 
 def generate_test_data(data_path: str, instances: dict, captions: dict):
@@ -57,10 +53,8 @@ def generate_test_data(data_path: str, instances: dict, captions: dict):
         yield {
             "images": [image],
             "problem": "<image>Provide a brief description of the given image.",
-            "answer": {
-                "instances": img_instances,
-                "captions": img_captions
-            },
+            "answer": img_captions,
+            "instances": img_instances
         }
 
 def load_instances_and_captions(instances_json_path, captions_json_path):
