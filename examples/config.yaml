@@ -12,7 +12,7 @@ data:
   rollout_batch_size: 128  # equivalent to verl's data.train_batch_size, original: 512
   mini_rollout_batch_size: null  # equivalent to verl's data.gen_batch_size
   val_batch_size: 256 # original: 1024
-  format_prompt: ./examples/format_prompt/math_adapted.jinja
+  format_prompt: ./examples/format_prompt/caption.jinja
   override_chat_template: null
   shuffle: true
   seed: 1
@@ -85,7 +85,7 @@ worker:
 
   reward:
     reward_type: batch
-    reward_function: ./examples/reward_function/math_adapted.py:compute_score
+    reward_function: ./examples/reward_function/coco_cider.py:compute_score
 
 trainer:
   total_epochs: 15
