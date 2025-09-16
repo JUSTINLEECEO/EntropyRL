@@ -4,9 +4,9 @@ from datasets import Dataset, DatasetDict, Sequence
 from datasets import Image as ImageData
 from PIL import Image
 
-N_train = 2000 # Limit to first 2000 images
-N_val = 300   # Limit to first 300 images
-N_test = 300  # Limit to first 300 images
+N_train = 10000 # Limit to first 10000 images
+N_val = 1500   # Limit to first 1500 images
+N_test = 1500  # Limit to first 1500 images
 MSCOCO_PATH = "/share/liyilin-nfs/datasets/MSCOCO"
 
 def generate_train_data(data_path: str, instances: dict, captions: dict):
