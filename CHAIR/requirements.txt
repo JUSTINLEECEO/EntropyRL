@@ -1,4 +1,0 @@
-numpy==1.14.2
-nltk==3.2.5
-pattern==3.6
-pycocotools==2.0.0
