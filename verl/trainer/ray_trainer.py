@@ -244,6 +244,7 @@ class RayPPOTrainer:
             self.training_steps = len(train_dataloader) * config.trainer.total_epochs
 
         config.worker.actor.optim.training_steps = self.training_steps
+        config.worker.actor.override_chat_template = config.data.override_chat_template
         config.worker.critic.optim.training_steps = self.training_steps
         print(f"Total training steps: {self.training_steps}")
 

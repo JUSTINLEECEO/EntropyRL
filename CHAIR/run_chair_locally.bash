@@ -1,4 +1,4 @@
-python chair.py \
+python chair_original.py \
     --cap_file example_inputs.jsonl \
     --image_id_key image_id \
     --caption_key caption \

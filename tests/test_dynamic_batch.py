@@ -51,7 +51,6 @@ def _create_random_mask(
     assert max_num_valid_tokens + max_left_padding <= sequence_length
     assert max_num_valid_tokens > 0 and max_ratio_of_valid_token <= sequence_length
     mask = torch.ones_like(input_ids, dtype=torch.int64)
-    # TODO: we can make this faster
     for i in range(batch_size):
         num_left_padding = np.random.randint(low=0, high=max_left_padding + 1, dtype=np.int64)
         num_valid = np.random.randint(low=min_num_valid_tokens, high=max_num_valid_tokens + 1, dtype=np.int64)

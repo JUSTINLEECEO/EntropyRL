@@ -10,7 +10,6 @@ Modified by: Maxlinn
 5. add pickle cache mechanism to make it fast for repetitive evaluations.
 '''
 
-
 import os
 import sys
 import nltk
@@ -21,6 +20,56 @@ import argparse
 import tqdm
 import pickle
 from collections import defaultdict
+from flask import Flask, request, jsonify
+
+# Flask app and global evaluator placeholder for serving requests
+app = Flask(__name__)
+EVALUATOR = None
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok'})
+
+@app.route('/computeCaption', methods=['POST'])
+def compute_caption_endpoint():
+    """POST JSON: either a single {"caption": "...","image_id": id} or a list of such dicts, or {"captions": [...]}.
+    Returns CHAIR metrics for each item by calling compute_chair_port.
+    """
+    if EVALUATOR is None:
+        return jsonify({'error': 'Evaluator not initialized'}), 500
+    data = request.get_json()
+    if data is None:
+        return jsonify({'error': 'No JSON body provided'}), 400
+
+    # normalize to list of items
+    if isinstance(data, dict) and 'captions' in data:
+        items = data['captions']
+    elif isinstance(data, list):
+        items = data
+    elif isinstance(data, dict) and 'caption' in data and 'image_id' in data:
+        items = [data]
+    else:
+        return jsonify({'error': 'Expected list or dict with caption and image_id, or {"captions": [...]}' }), 400
+
+    # validate items
+    valid_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if 'caption' not in item or 'image_id' not in item:
+            continue
+        try:
+            item['image_id'] = int(item['image_id'])
+        except Exception:
+            return jsonify({'error': 'image_id must be integer'}), 400
+        valid_items.append({'caption': item['caption'], 'image_id': item['image_id']})
+
+    if len(valid_items) == 0:
+        return jsonify({'error': 'no valid caption items provided'}), 400
+
+    # call batch computation
+    results = EVALUATOR.compute_chair_port(valid_items)
+    return jsonify(results)
 
 
 # copied from: https://github.com/LisaAnne/Hallucination/blob/master/data/synonyms.txt
@@ -106,7 +155,6 @@ teddy bear, teddybear
 hair drier, hairdryer
 toothbrush
 '''
-
 
 def combine_coco_captions(annotation_path):
 
@@ -398,6 +446,94 @@ class CHAIR(object):
     
         return output 
 
+    def compute_chair_port(self, captions, image_id_key: str = 'image_id', caption_key: str = 'caption'):
+        """
+        Compute CHAIR metrics for a batch of captions provided as a list of dicts.
+        captions: list of dicts, each dict must contain keys for image_id and caption (by default 'image_id' and 'caption').
+        Returns the same output format as compute_chair: {'sentences': [...], 'overall_metrics': {...}}
+        """
+        # prepare caps and eval_imids from provided captions list
+        if not isinstance(captions, list):
+            raise ValueError('captions must be a list of dicts')
+
+        caps = [obj[caption_key] for obj in captions]
+        eval_imids = [int(obj[image_id_key]) for obj in captions]
+
+        imid_to_objects = self.imid_to_objects
+        num_caps = 0.
+        num_hallucinated_caps = 0.
+        hallucinated_word_count = 0.
+        coco_word_count = 0.
+
+        num_recall_gt_objects = 0.
+        num_gt_objects = 0.
+
+        output = {'sentences': []}
+
+        for i in tqdm.trange(len(caps)):
+            cap: str = caps[i]
+            imid: int = eval_imids[i]
+
+            # get all words in the caption, as well as corresponding node word
+            words, node_words, idxs, raw_words = self.caption_to_words(cap)
+
+            gt_objects = imid_to_objects.get(imid, set())
+            cap_dict = {'image_id': imid,
+                        'caption': cap,
+                        'mscoco_hallucinated_words': [],
+                        'mscoco_gt_words': list(gt_objects),
+                        'mscoco_generated_words': list(node_words),
+                        'hallucination_idxs': [],
+                        'words': raw_words
+                        }
+
+            cap_dict['metrics'] = {'CHAIRs': 0,
+                                   'CHAIRi': 0,
+                                   'Recall': 0}
+
+            coco_word_count += len(node_words)
+            hallucinated = False
+
+            recall_gt_objects = set()
+            for word, node_word, idx in zip(words, node_words, idxs):
+                if node_word not in gt_objects:
+                    hallucinated_word_count += 1
+                    cap_dict['mscoco_hallucinated_words'].append((word, node_word))
+                    cap_dict['hallucination_idxs'].append(idx)
+                    hallucinated = True
+                else:
+                    recall_gt_objects.add(node_word)
+
+            num_caps += 1
+            if hallucinated:
+                num_hallucinated_caps += 1
+
+            num_gt_objects += len(gt_objects)
+            num_recall_gt_objects += len(recall_gt_objects)
+
+            cap_dict['metrics']['CHAIRs'] = int(hallucinated)
+            cap_dict['metrics']['CHAIRi'] = 0.
+            cap_dict['metrics']['Recall'] = 0.
+
+            if len(words) > 0:
+                cap_dict['metrics']['CHAIRi'] = len(cap_dict['mscoco_hallucinated_words']) / float(len(words))
+
+            if len(gt_objects) > 0:
+                cap_dict['metrics']['Recall'] = len(recall_gt_objects) / len(gt_objects)
+
+            output['sentences'].append(cap_dict)
+
+        chair_s = (num_hallucinated_caps / num_caps) if num_caps > 0 else 0.0
+        chair_i = (hallucinated_word_count / coco_word_count) if coco_word_count > 0 else 0.0
+        recall = (num_recall_gt_objects / num_gt_objects) if num_gt_objects > 0 else 0.0
+
+        output['overall_metrics'] = {'CHAIRs': chair_s,
+                                     'CHAIRi': chair_i,
+                                     'Recall': recall}
+
+        # return output
+        return output['overall_metrics']
+
 def load_generated_captions(cap_file, image_id_key:str, caption_key:str):
     #Read in captions        
     # it should be list of dict
@@ -428,7 +564,7 @@ def print_metrics(hallucination_cap_dict, quiet=False):
         k_str = str(k).ljust(10)
         v_str = f'{v * 100:.01f}'
         print(k_str, v_str, sep=': ')
- 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
@@ -447,6 +583,12 @@ if __name__ == '__main__':
     parser.add_argument("--save_path", type=str, default="",
                         help="saving CHAIR evaluate and results to json, useful for debugging the caption model.")
     
+    parser.add_argument("--serve", action="store_true",
+                        help="whether to start the Flask server")
+    
+    parser.add_argument("--port", type=int, default=5000,
+                        help="port for the Flask server")
+    
     args = parser.parse_args()
 
     if args.cache and os.path.exists(args.cache):
@@ -458,9 +600,15 @@ if __name__ == '__main__':
         pickle.dump(evaluator, open(args.cache, 'wb'))
         print(f"cached evaluator to: {args.cache}")
 
-    cap_dict = evaluator.compute_chair(args.cap_file, args.image_id_key, args.caption_key) 
+    # DEBUG
+    # Use CHAIR evaluator locally
+    if not args.serve:
+        cap_dict = evaluator.compute_chair(args.cap_file, args.image_id_key, args.caption_key) 
+        print_metrics(cap_dict)
+        if args.save_path:
+            save_hallucinated_words(args.save_path, cap_dict)
     
-    print_metrics(cap_dict)
-    
-    if args.save_path:
-        save_hallucinated_words(args.save_path, cap_dict)
+    # Start the Flask server if --serve is specified
+    if args.serve:
+        EVALUATOR = evaluator  # Set the global evaluator
+        app.run(host='0.0.0.0', port=args.port, debug=True)

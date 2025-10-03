@@ -98,6 +98,7 @@ class RLHFDataset(Dataset):
         prompt_key: str = "prompt",
         answer_key: str = "answer",
         image_key: str = "images",
+        image_id_key: str = "image_id",
         video_key: str = "videos",
         image_dir: Optional[str] = None,
         video_fps: float = 2.0,
@@ -114,6 +115,7 @@ class RLHFDataset(Dataset):
         self.prompt_key = prompt_key
         self.answer_key = answer_key
         self.image_key = image_key
+        self.image_id_key = image_id_key
         self.video_key = video_key
         self.image_dir = image_dir
         self.video_fps = video_fps
@@ -302,4 +304,5 @@ class RLHFDataset(Dataset):
         example["position_ids"] = position_ids
         example["raw_prompt_ids"] = raw_prompt_ids
         example["ground_truth"] = example.pop(self.answer_key)
+        example["image_id"] = example.pop(self.image_id_key, None)
         return example

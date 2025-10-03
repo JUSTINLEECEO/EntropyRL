@@ -38,6 +38,7 @@ class DataConfig:
     prompt_key: str = "prompt"
     answer_key: str = "answer"
     image_key: str = "images"
+    image_id_key: str = "image_id"
     video_key: str = "videos"
     image_dir: Optional[str] = None
     video_fps: float = 2.0

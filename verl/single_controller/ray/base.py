@@ -470,7 +470,6 @@ def create_colocated_worker_cls(class_dict: dict[str, RayClassWithInitArgs]):
 
     assert cls_dict.keys() == init_args_dict.keys()
 
-    # TODO: create a class with customizable name
     class WorkerDict(worker_cls):
         def __init__(self):
             super().__init__()

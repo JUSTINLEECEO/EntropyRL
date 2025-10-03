@@ -21,6 +21,8 @@ from typing import Any, Optional
 
 import torch
 import torch.distributed as dist
+import requests
+import json
 from einops import rearrange
 from ray.experimental.tqdm_ray import tqdm
 from torch import nn
@@ -34,7 +36,8 @@ from ...utils.seqlen_balancing import prepare_dynamic_batch, restore_dynamic_bat
 from ...utils.ulysses import gather_outputs_and_unpad, ulysses_pad_and_slice_inputs
 from .base import BasePPOActor
 from .config import ActorConfig
-
+from ...utils.tokenizer import get_tokenizer
+from transformers import PreTrainedTokenizer
 
 try:
     from flash_attn.bert_padding import index_first_axis, pad_input, rearrange, unpad_input
@@ -216,19 +219,72 @@ class DataParallelPPOActor(BasePPOActor):
 
         return log_probs
 
+    def init_tokenizer(self):
+        tokenizer = get_tokenizer(
+            self.config.model.model_path,
+            override_chat_template=self.config.override_chat_template,
+            trust_remote_code=self.config.model.trust_remote_code,
+            use_fast=True,
+        )
+        return tokenizer
+
+    # TODO: make max_clip_ratio_high and min_clip_ratio_high configurable
+    def adjust_clip_ratio_high_by_chair_score(self, tokenizer: PreTrainedTokenizer, micro_batch: dict[str, torch.Tensor], base_clip_ratio_high=0.2, max_clip_ratio_high=0.3, min_clip_ratio_high=0.3):
+        """
+        Adjust clip_ratio_high based on the overall CHAIR_i for the micro_batch by calling CHAIR server.
+        """
+        captions = micro_batch["responses"]  # (bsz, response_len)
+        captions = [tokenizer.decode(ids, skip_special_tokens=True) for ids in captions]
+        image_ids = micro_batch.get("image_id", None)
+        if image_ids is None:
+            raise ValueError("image_id is required in micro_batch to call CHAIR server.")
+
+        # prepare payload items expected by CHAIR server
+        items = [{"caption": c, "image_id": int(i)} for c, i in zip(captions, image_ids)]
+
+        # DEBUG
+        # Save items to debug file (append as JSON line) for debugging
+        # try:
+        #     debug_path = "/share/liyilin-local/DEBUGGING/chair_items_debug.jsonl"
+        #     with open(debug_path, "a", encoding="utf-8") as _dbg_f:
+        #         _dbg_f.write(json.dumps(items, ensure_ascii=False) + "\n")
+        #         _dbg_f.write("------------------------------------------------------------------------------\n")
+        # except Exception as _e:
+        #     print(f"Failed to write CHAIR debug items to file: {_e}")
+
+        server = getattr(self.config, "chair_server_url", "http://127.0.0.1:5000")
+        timeout = getattr(self.config, "chair_timeout", 30)
+
+        overall_chair_i = None
+        try:
+            resp = requests.post(server.rstrip('/') + '/computeCaption', json=items, headers={"Content-Type": "application/json"}, timeout=timeout)
+            resp.raise_for_status()
+            res = resp.json()
+            overall_chair_i = res['CHAIRi']
+        except Exception as e:
+            print(f"Failed to call CHAIR server {server}: {e}")
+
+        clip_ratio_high = float(min_clip_ratio_high + (max_clip_ratio_high - min_clip_ratio_high) * overall_chair_i)
+
+        print(f"Overall CHAIR_i: {overall_chair_i}, adjusted clip_ratio_high: {clip_ratio_high}")
+        return clip_ratio_high, overall_chair_i
+
     def update_policy(self, data: DataProto) -> dict[str, Any]:
         self.actor_module.train()
 
         temperature = data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid slient error
         select_keys = ["input_ids", "attention_mask", "position_ids", "responses", "response_mask"]
         select_keys.extend(["old_log_probs", "ref_log_probs", "advantages"])
-        non_tensor_select_keys = ["multi_modal_inputs"]
+        non_tensor_select_keys = ["multi_modal_inputs", "image_id"]
 
         # Split to make minibatch iterator for updating the actor
         # See PPO paper for details. https://arxiv.org/abs/1707.06347
         mini_batches = data.select(select_keys, non_tensor_select_keys).split(self.config.global_batch_size_per_device)
 
         metrics = defaultdict(list)
+
+        tokenizer = self.init_tokenizer()
+
         for _ in range(self.config.ppo_epochs):
             if self.rank == 0:
                 mini_batches = tqdm(mini_batches, desc="Train mini-batches", position=1)
@@ -253,6 +309,9 @@ class DataParallelPPOActor(BasePPOActor):
                     old_log_probs = model_inputs["old_log_probs"]
                     advantages = model_inputs["advantages"]
 
+                    # adjust clip_ratio_high dynamically based on CHAIR score
+                    clip_ratio_high, overall_chair_i = self.adjust_clip_ratio_high_by_chair_score(tokenizer, model_inputs, base_clip_ratio_high=self.config.clip_ratio_high)
+
                     # all return: (bsz, response_length)
                     log_probs = self._forward_micro_batch(model_inputs, temperature=temperature)
 
@@ -262,7 +321,7 @@ class DataParallelPPOActor(BasePPOActor):
                         advantages=advantages,
                         response_mask=response_mask,
                         clip_ratio_low=self.config.clip_ratio_low,
-                        clip_ratio_high=self.config.clip_ratio_high,
+                        clip_ratio_high=clip_ratio_high,
                         clip_ratio_dual=self.config.clip_ratio_dual,
                         loss_avg_mode=self.config.loss_avg_mode,
                         entropy_coef=self.config.entropy_coef
@@ -292,6 +351,7 @@ class DataParallelPPOActor(BasePPOActor):
                         "actor/entropy_loss": pg_metrics["entropy_loss"],
                         "actor/ppo_kl": pg_metrics["ppo_kl"],
                         "actor/policy_entropy": pg_metrics["policy_entropy"],
+                        "actor/overall_chair_i": overall_chair_i,
                     }
                     append_to_dict(metrics, batch_metrics)
 

@@ -4,7 +4,7 @@ from datasets import Dataset, DatasetDict, Sequence
 from datasets import Image as ImageData
 from PIL import Image
 
-N_train = 10000 # Limit to first 10000 images
+N_train = 10000   # Limit to first 10000 images
 N_val = 1500   # Limit to first 1500 images
 N_test = 1500  # Limit to first 1500 images
 MSCOCO_PATH = "/share/liyilin-nfs/datasets/MSCOCO"
@@ -26,7 +26,7 @@ def generate_train_data(data_path: str, instances: dict, captions: dict):
                 "images": [image],
                 "problem": "<image>Provide a brief description of the given image.",
                 "answer": img_captions,
-                "instances": img_instances
+                "image_id": image_id
             }
 
 def generate_val_data(data_path: str, instances: dict, captions: dict):
@@ -40,7 +40,7 @@ def generate_val_data(data_path: str, instances: dict, captions: dict):
             "images": [image],
             "problem": "<image>Provide a brief description of the given image.",
             "answer": img_captions,
-            "instances": img_instances
+            "image_id": image_id
         }
 
 def generate_test_data(data_path: str, instances: dict, captions: dict):
@@ -54,7 +54,7 @@ def generate_test_data(data_path: str, instances: dict, captions: dict):
             "images": [image],
             "problem": "<image>Provide a brief description of the given image.",
             "answer": img_captions,
-            "instances": img_instances
+            "image_id": image_id
         }
 
 def load_instances_and_captions(instances_json_path, captions_json_path):
@@ -105,7 +105,7 @@ def main():
         gen_kwargs={"data_path": val_path, "instances": val_instances_map, "captions": val_captions_map}
     )
 
-    dataset = DatasetDict({"train": trainset, "validation": valset, "test": testset}).cast_column("images", Sequence(ImageData()))
+    dataset = DatasetDict({"train": trainset, "val": valset, "test": testset}).cast_column("images", Sequence(ImageData()))
     dataset.push_to_hub("JustinLeeCEO/MSCOCO2014")
     print("Successfully pushed the dataset to HuggingFace!")
 

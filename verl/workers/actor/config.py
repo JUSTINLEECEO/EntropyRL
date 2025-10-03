@@ -104,6 +104,9 @@ class ActorConfig:
     """enable torch compile"""
     entropy_coef: float = 0.0
     """Coefficient for entropy regularization"""
+    coco_path: Optional[str] = None
+    """Path to COCO annotations, e.g., /path/to/annotations"""
+    override_chat_template: Optional[str] = None
     model: ModelConfig = field(default_factory=ModelConfig)
     optim: OptimConfig = field(default_factory=OptimConfig)
     fsdp: FSDPConfig = field(default_factory=FSDPConfig)
