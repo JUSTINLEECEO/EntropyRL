@@ -377,10 +377,11 @@ def compute_policy_loss(
             shape: (bs, response_length)
         response_mask: `(torch.Tensor)`
             shape: (bs, response_length)
-        clip_ratio_low: (float)
+        clip_ratio_low: (float or torch.Tensor)
             The lower clip range used in PPO. See https://arxiv.org/abs/1707.06347
-        clip_ratio_high: (float)
+        clip_ratio_high: (float or torch.Tensor)
             The higher clip range used in DAPO. See https://arxiv.org/pdf/2503.14476
+            Can be a tensor of shape (bs,) or (bs,1) to specify per-sentence clip ratios.
         clip_ratio_dual: (float)
             The dual clip range used in Dual-clip PPO. See https://arxiv.org/pdf/1912.09729
         loss_avg_mode: (Literal["token", "seq"])
@@ -404,11 +405,40 @@ def compute_policy_loss(
     # clamp negative_approx_kl to avoid nan kld
     negative_approx_kl = torch.clamp(negative_approx_kl, -20.0, 20.0)
     ratio = torch.exp(negative_approx_kl)
+
+    # Prepare clip bounds: support scalar or per-sentence tensor for clip_ratio_low/high
+    device = negative_approx_kl.device
+    dtype = negative_approx_kl.dtype
+
+    # clip_ratio_low
+    if torch.is_tensor(clip_ratio_low):
+        clip_low_t = clip_ratio_low.to(device=device, dtype=dtype)
+        if clip_low_t.dim() == 1:
+            clip_low_t = clip_low_t.unsqueeze(-1)
+        if clip_low_t.size(-1) == 1:
+            clip_low_t = clip_low_t.expand(-1, negative_approx_kl.size(-1))
+        lower_bound = torch.log1p(-clip_low_t)
+    else:
+        # make lower_bound a tensor on the same device/dtype to ensure compatibility with clamp
+        lower_val = np.log(1.0 - clip_ratio_low)
+        lower_bound = torch.tensor(lower_val, device=device, dtype=dtype)
+
+    # clip_ratio_high
+    if torch.is_tensor(clip_ratio_high):
+        clip_high_t = clip_ratio_high.to(device=device, dtype=dtype)
+        if clip_high_t.dim() == 1:
+            clip_high_t = clip_high_t.unsqueeze(-1)
+        if clip_high_t.size(-1) == 1:
+            clip_high_t = clip_high_t.expand(-1, negative_approx_kl.size(-1))
+        upper_bound = torch.log1p(clip_high_t)
+    else:
+        # make upper_bound a tensor on the same device/dtype to ensure compatibility with clamp
+        upper_val = np.log(1.0 + clip_ratio_high)
+        upper_bound = torch.tensor(upper_val, device=device, dtype=dtype)
+
     # clamp the ratio before exp to avoid nan grad
     # see: https://github.com/pytorch/pytorch/issues/10729
-    clipped_ratio = torch.exp(
-        torch.clamp(negative_approx_kl, np.log(1.0 - clip_ratio_low), np.log(1.0 + clip_ratio_high))
-    )
+    clipped_ratio = torch.exp(torch.clamp(negative_approx_kl, lower_bound, upper_bound))
 
     # pg metrics
     metrics = {"ppo_kl": -negative_approx_kl}

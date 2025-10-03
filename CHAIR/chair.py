@@ -531,8 +531,8 @@ class CHAIR(object):
                                      'CHAIRi': chair_i,
                                      'Recall': recall}
 
-        # return output
-        return output['overall_metrics']
+        # return full output including per-sentence metrics
+        return output
 
 def load_generated_captions(cap_file, image_id_key:str, caption_key:str):
     #Read in captions        

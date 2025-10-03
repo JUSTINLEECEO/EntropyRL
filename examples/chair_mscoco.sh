@@ -50,7 +50,7 @@ echo "Starting main program..."
 python3 -m verl.trainer.main \
     config=examples/config.yaml \
     data.train_files=JustinLeeCEO/MSCOCO2014@train \
-    data.val_files=JustinLeeCEO/MSCOCO2014@test \
+    data.val_files=JustinLeeCEO/MSCOCO2014@val \
     worker.actor.model.model_path=${MODEL_PATH} \
     trainer.experiment_name=qwen2_5_vl_3b_mscoco_grpo_with_dynamic_epsilon_baseline2 \
     trainer.n_gpus_per_node=8 \

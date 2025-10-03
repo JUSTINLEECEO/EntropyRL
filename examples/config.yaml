@@ -95,12 +95,12 @@ trainer:
   max_steps: null
   project_name: EntropyRL
   experiment_name: qwen2_5_7b_mscoco_grpo
-  logger: ["console", "wandb"]  # original: ["console", "wandb"]
+  logger: ["console"]  # original: ["console", "wandb"]
   nnodes: 1
   n_gpus_per_node: 8
   max_try_make_batch: 20  # -1 means no limit
   val_freq: 5  # -1 to disable
-  val_before_train: true # original: true
+  val_before_train: false # original: true
   val_only: false
   val_generations_to_log: 3
   save_freq: 5  # -1 to disable

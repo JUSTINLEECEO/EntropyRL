@@ -229,9 +229,10 @@ class DataParallelPPOActor(BasePPOActor):
         return tokenizer
 
     # TODO: make max_clip_ratio_high and min_clip_ratio_high configurable
-    def adjust_clip_ratio_high_by_chair_score(self, tokenizer: PreTrainedTokenizer, micro_batch: dict[str, torch.Tensor], base_clip_ratio_high=0.2, max_clip_ratio_high=0.3, min_clip_ratio_high=0.3):
+    def adjust_clip_ratio_high_by_chair_score(self, tokenizer: PreTrainedTokenizer, micro_batch: dict[str, torch.Tensor], base_clip_ratio_high=0.2, max_clip_ratio_high=10, min_clip_ratio_high=0):
         """
-        Adjust clip_ratio_high based on the overall CHAIR_i for the micro_batch by calling CHAIR server.
+        Adjust clip_ratio_high based on the per-sentence CHAIR_i for the micro_batch by calling CHAIR server.
+        Returns a list/tensor of clip_ratio_high values aligned to micro_batch batch order and the list of per-sentence CHAIRi.
         """
         captions = micro_batch["responses"]  # (bsz, response_len)
         captions = [tokenizer.decode(ids, skip_special_tokens=True) for ids in captions]
@@ -256,18 +257,25 @@ class DataParallelPPOActor(BasePPOActor):
         timeout = getattr(self.config, "chair_timeout", 30)
 
         overall_chair_i = None
+        per_sentence_chair_i = None
         try:
             resp = requests.post(server.rstrip('/') + '/computeCaption', json=items, headers={"Content-Type": "application/json"}, timeout=timeout)
             resp.raise_for_status()
             res = resp.json()
-            overall_chair_i = res['CHAIRi']
+            # If server returns overall_metrics only, try to extract sentences
+            if isinstance(res, dict) and 'sentences' in res:
+                per_sentence_chair_i = [s['metrics']['CHAIRi'] for s in res['sentences']]
+                overall_chair_i = res["overall_metrics"]["CHAIRi"]
+            else:
+                raise ValueError(f"Unexpected response format from CHAIR server!\n")
         except Exception as e:
             print(f"Failed to call CHAIR server {server}: {e}")
 
-        clip_ratio_high = float(min_clip_ratio_high + (max_clip_ratio_high - min_clip_ratio_high) * overall_chair_i)
+        # compute per-sentence clip ratios
+        clip_ratios = [float(min_clip_ratio_high + (max_clip_ratio_high - min_clip_ratio_high) * (chi if chi is not None else 0.0)) for chi in per_sentence_chair_i]
 
-        print(f"Overall CHAIR_i: {overall_chair_i}, adjusted clip_ratio_high: {clip_ratio_high}")
-        return clip_ratio_high, overall_chair_i
+        print(f"Overall CHAIR_i: {overall_chair_i}")
+        return clip_ratios, overall_chair_i
 
     def update_policy(self, data: DataProto) -> dict[str, Any]:
         self.actor_module.train()
@@ -309,8 +317,12 @@ class DataParallelPPOActor(BasePPOActor):
                     old_log_probs = model_inputs["old_log_probs"]
                     advantages = model_inputs["advantages"]
 
-                    # adjust clip_ratio_high dynamically based on CHAIR score
-                    clip_ratio_high, overall_chair_i = self.adjust_clip_ratio_high_by_chair_score(tokenizer, model_inputs, base_clip_ratio_high=self.config.clip_ratio_high)
+                    # adjust clip_ratio_high dynamically per sentence based on CHAIR score
+                    clip_ratio_high_list, overall_chair_i = self.adjust_clip_ratio_high_by_chair_score(tokenizer, model_inputs, base_clip_ratio_high=self.config.clip_ratio_high)
+
+                    # convert per-sentence clip ratios to tensor that matches old_log_probs shape
+                    # old_log_probs shape: (bsz, response_length)
+                    clip_ratio_high_tensor = torch.tensor(clip_ratio_high_list, device=old_log_probs.device, dtype=old_log_probs.dtype).unsqueeze(-1)
 
                     # all return: (bsz, response_length)
                     log_probs = self._forward_micro_batch(model_inputs, temperature=temperature)
@@ -321,7 +333,7 @@ class DataParallelPPOActor(BasePPOActor):
                         advantages=advantages,
                         response_mask=response_mask,
                         clip_ratio_low=self.config.clip_ratio_low,
-                        clip_ratio_high=clip_ratio_high,
+                        clip_ratio_high=clip_ratio_high_tensor,
                         clip_ratio_dual=self.config.clip_ratio_dual,
                         loss_avg_mode=self.config.loss_avg_mode,
                         entropy_coef=self.config.entropy_coef
