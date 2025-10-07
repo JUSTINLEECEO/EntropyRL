@@ -433,6 +433,7 @@ class RayPPOTrainer:
             sample_labels.extend(ground_truths.tolist())
             sample_scores.extend(scores)
 
+            # DEBUG
             # save the validating generation for debugging
             if self.config.trainer.save_debug_path:
                 print("Saving validation debug prompts, answers, and ground truths...\n")

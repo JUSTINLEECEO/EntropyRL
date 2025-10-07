@@ -229,7 +229,7 @@ class DataParallelPPOActor(BasePPOActor):
         return tokenizer
 
     # TODO: make max_clip_ratio_high and min_clip_ratio_high configurable
-    def adjust_clip_ratio_high_by_chair_score(self, tokenizer: PreTrainedTokenizer, micro_batch: dict[str, torch.Tensor], base_clip_ratio_high=0.2, max_clip_ratio_high=10, min_clip_ratio_high=0):
+    def adjust_clip_ratio_high_by_chair_score(self, tokenizer: PreTrainedTokenizer, micro_batch: dict[str, torch.Tensor], base_clip_ratio_high=0.2, min_clip_ratio_high=0, max_clip_ratio_high=10):
         """
         Adjust clip_ratio_high based on the per-sentence CHAIR_i for the micro_batch by calling CHAIR server.
         Returns a list/tensor of clip_ratio_high values aligned to micro_batch batch order and the list of per-sentence CHAIRi.
@@ -272,7 +272,14 @@ class DataParallelPPOActor(BasePPOActor):
             print(f"Failed to call CHAIR server {server}: {e}")
 
         # compute per-sentence clip ratios
-        clip_ratios = [float(min_clip_ratio_high + (max_clip_ratio_high - min_clip_ratio_high) * (chi if chi is not None else 0.0)) for chi in per_sentence_chair_i]
+        # clip_ratios = [float(min_clip_ratio_high + (max_clip_ratio_high - min_clip_ratio_high) * (chi if chi is not None else 0.0)) for chi in per_sentence_chair_i]
+        # compute per-sentence clip ratios using a piecewise function: min=0.2, mid=0.3, max=0.4
+        clip_ratios = []
+        for chi in per_sentence_chair_i:
+            if chi < 0.05:
+                clip_ratios.append(0.2)
+            else:
+                clip_ratios.append(0.4)
 
         print(f"Overall CHAIR_i: {overall_chair_i}")
         return clip_ratios, overall_chair_i
@@ -364,6 +371,8 @@ class DataParallelPPOActor(BasePPOActor):
                         "actor/ppo_kl": pg_metrics["ppo_kl"],
                         "actor/policy_entropy": pg_metrics["policy_entropy"],
                         "actor/overall_chair_i": overall_chair_i,
+                        "actor/average_clip_ratio_low": pg_metrics["average_clip_ratio_low"],
+                        "actor/average_clip_ratio_high": pg_metrics["average_clip_ratio_high"]
                     }
                     append_to_dict(metrics, batch_metrics)
 

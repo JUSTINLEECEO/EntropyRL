@@ -419,9 +419,8 @@ def compute_policy_loss(
             clip_low_t = clip_low_t.expand(-1, negative_approx_kl.size(-1))
         lower_bound = torch.log1p(-clip_low_t)
     else:
-        # make lower_bound a tensor on the same device/dtype to ensure compatibility with clamp
-        lower_val = np.log(1.0 - clip_ratio_low)
-        lower_bound = torch.tensor(lower_val, device=device, dtype=dtype)
+        clip_low_t = torch.full((negative_approx_kl.size(0), negative_approx_kl.size(-1)), float(clip_ratio_low), device=device, dtype=dtype)
+        lower_bound = torch.tensor(np.log(1.0 - clip_ratio_low), device=device, dtype=dtype)
 
     # clip_ratio_high
     if torch.is_tensor(clip_ratio_high):
@@ -432,13 +431,22 @@ def compute_policy_loss(
             clip_high_t = clip_high_t.expand(-1, negative_approx_kl.size(-1))
         upper_bound = torch.log1p(clip_high_t)
     else:
-        # make upper_bound a tensor on the same device/dtype to ensure compatibility with clamp
-        upper_val = np.log(1.0 + clip_ratio_high)
-        upper_bound = torch.tensor(upper_val, device=device, dtype=dtype)
+        clip_high_t = torch.full((negative_approx_kl.size(0), negative_approx_kl.size(-1)), float(clip_ratio_high), device=device, dtype=dtype)
+        upper_bound = torch.tensor(np.log(1.0 + clip_ratio_high), device=device, dtype=dtype)
 
     # clamp the ratio before exp to avoid nan grad
     # see: https://github.com/pytorch/pytorch/issues/10729
     clipped_ratio = torch.exp(torch.clamp(negative_approx_kl, lower_bound, upper_bound))
+
+    # compute clip ratio metrics (masked mean across tokens)
+    try:
+        clip_low_metric = VF.masked_mean(clip_low_t, response_mask).detach().item()
+    except Exception:
+        clip_low_metric = float(clip_ratio_low) if not torch.is_tensor(clip_ratio_low) else float(torch.mean(clip_ratio_low).item())
+    try:
+        clip_high_metric = VF.masked_mean(clip_high_t, response_mask).detach().item()
+    except Exception:
+        clip_high_metric = float(clip_ratio_high) if not torch.is_tensor(clip_ratio_high) else float(torch.mean(clip_ratio_high).item())
 
     # pg metrics
     metrics = {"ppo_kl": -negative_approx_kl}
@@ -447,6 +455,9 @@ def compute_policy_loss(
     metrics["entropy_loss"] = entropy_loss.detach().item()
     # adding policy entropy to the metrics
     metrics["policy_entropy"] = VF.masked_mean(-log_probs * torch.exp(log_probs), response_mask).detach().item()
+
+    metrics["average_clip_ratio_low"] = clip_low_metric
+    metrics["average_clip_ratio_high"] = clip_high_metric
 
     pg_loss = -advantages * ratio  # -ratio * A
     pg_loss2 = -advantages * clipped_ratio  # -clip(ratio, 1-clip_low, 1+clip_high) * A
