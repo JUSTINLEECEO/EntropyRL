@@ -276,10 +276,10 @@ class DataParallelPPOActor(BasePPOActor):
         # compute per-sentence clip ratios using a piecewise function: min=0.2, mid=0.3, max=0.4
         clip_ratios = []
         for chi in per_sentence_chair_i:
-            if chi < 0.05:
-                clip_ratios.append(0.2)
+            if chi < 0.0001:
+                clip_ratios.append(0.3)
             else:
-                clip_ratios.append(0.4)
+                clip_ratios.append(0.5)
 
         print(f"Overall CHAIR_i: {overall_chair_i}")
         return clip_ratios, overall_chair_i

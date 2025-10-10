@@ -96,6 +96,7 @@ class SequentialFunctionRewardManager(FunctionRewardManager):
                     "response": response_str,
                     "response_length": cur_response_length,
                     "ground_truth": data.non_tensor_batch["ground_truth"][i],
+                    "image_id": data.non_tensor_batch["image_id"][i],
                 }
             )
             reward_tensor[i, cur_response_length - 1] = score["overall"]
@@ -123,6 +124,7 @@ class BatchFunctionRewardManager(FunctionRewardManager):
                     "response": response_str,
                     "response_length": cur_response_length,
                     "ground_truth": data.non_tensor_batch["ground_truth"][i],
+                    "image_id": data.non_tensor_batch["image_id"][i],
                 }
             )
 

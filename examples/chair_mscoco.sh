@@ -52,7 +52,7 @@ python3 -m verl.trainer.main \
     data.train_files=JustinLeeCEO/MSCOCO2014@train \
     data.val_files=JustinLeeCEO/MSCOCO2014@val \
     worker.actor.model.model_path=${MODEL_PATH} \
-    trainer.experiment_name=qwen2_5_vl_3b_mscoco_grpo_with_dynamic_epsilon_sentencelevel4 \
+    trainer.experiment_name=dynamic_epsilon_sentencelevel6 \
     trainer.n_gpus_per_node=8 \
     trainer.save_debug_path=null \
     worker.reward.reward_function=./examples/reward_function/coco_cider.py:compute_score
