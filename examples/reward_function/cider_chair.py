@@ -28,27 +28,25 @@ def compute_score(reward_inputs: List[Dict[str, Any]]) -> List[Dict[str, float]]
     meteor_scores = [coco_eval.imgToEval[i]["METEOR"] for i in range(len(reward_inputs))]
     rouge_scores = [coco_eval.imgToEval[i]["ROUGE_L"] for i in range(len(reward_inputs))]
 
-    overall_chair_i = None
-    overall_chair_s = None
-
     # prepare items only if image_id exists in inputs
     if all(("image_id" in ri) for ri in reward_inputs):
         items = [{"caption": ri["response"], "image_id": int(ri["image_id"])} for ri in reward_inputs]
         server = "http://127.0.0.1:5000"
         timeout = 30
-        resp = requests.post(server.rstrip('/') + '/computeCaption', json=items, headers={"Content-Type": "application/json"}, timeout=timeout)
-        resp.raise_for_status()
-        res_chair = resp.json()
-        overall_chair_i = res_chair["overall_metrics"]["CHAIRi"]
-        overall_chair_s = res_chair["overall_metrics"]["CHAIRs"]
-        # print(f"\nCHAIRi: {overall_chair_i}, CHAIRs: {overall_chair_s}\n")
+        chair_scores = []
+        for item in items:
+            resp = requests.post(server.rstrip('/') + '/computeCaption', json=[item], headers={"Content-Type": "application/json"}, timeout=timeout)
+            resp.raise_for_status()
+            res_chair = resp.json()
+            chair_i = res_chair["sentences"][0]["metrics"]["CHAIRi"]
+            chair_scores.append(chair_i)
     else:
         raise ValueError("All reward_inputs must contain 'image_id' to compute CHAIR metrics.")
 
     payload = []
     for i in range(len(cider_scores)):
         item = {
-            "overall": cider_scores[i],
+            "overall": 1 - chair_scores[i], # cider_scores[i] - chair_scores[i]
             "CIDEr": cider_scores[i],
             "BLEU_1": bleu_1_scores[i],
             "BLEU_2": bleu_2_scores[i],
@@ -56,8 +54,7 @@ def compute_score(reward_inputs: List[Dict[str, Any]]) -> List[Dict[str, float]]
             "BLEU_4": bleu_4_scores[i],
             "METEOR": meteor_scores[i],
             "ROUGE": rouge_scores[i],
-            "CHAIRi": overall_chair_i,
-            "CHAIRs": overall_chair_s
+            "CHAIRi": chair_scores[i],
         }
         payload.append(item)
     return payload

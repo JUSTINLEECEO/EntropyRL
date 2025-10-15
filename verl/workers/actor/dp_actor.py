@@ -279,7 +279,7 @@ class DataParallelPPOActor(BasePPOActor):
             if chi < 0.0001:
                 clip_ratios.append(0.3)
             else:
-                clip_ratios.append(0.5)
+                clip_ratios.append(0.3)
 
         print(f"Overall CHAIR_i: {overall_chair_i}")
         return clip_ratios, overall_chair_i

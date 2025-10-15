@@ -47,15 +47,24 @@ CHAIR_PID=$!
 # rm -f ${BATCH_FILE}
 
 echo "Starting main program..."
+# python3 -m verl.trainer.main \
+#     config=examples/config.yaml \
+#     data.train_files=JustinLeeCEO/MSCOCO2014@train \
+#     data.val_files=JustinLeeCEO/MSCOCO2014@val \
+#     worker.actor.model.model_path=${MODEL_PATH} \
+#     trainer.experiment_name=dynamic_epsilon_sentencelevel6 \
+#     trainer.n_gpus_per_node=8 \
+#     trainer.save_debug_path=null \
+#     worker.reward.reward_function=./examples/reward_function/coco_cider.py:compute_score
 python3 -m verl.trainer.main \
     config=examples/config.yaml \
     data.train_files=JustinLeeCEO/MSCOCO2014@train \
     data.val_files=JustinLeeCEO/MSCOCO2014@val \
     worker.actor.model.model_path=${MODEL_PATH} \
-    trainer.experiment_name=dynamic_epsilon_sentencelevel6 \
+    trainer.experiment_name=only_chair_reward \
     trainer.n_gpus_per_node=8 \
     trainer.save_debug_path=null \
-    worker.reward.reward_function=./examples/reward_function/coco_cider.py:compute_score
+    worker.reward.reward_function=./examples/reward_function/cider_chair.py:compute_score
 
 echo "Stopping CHAIR server. (pid=${CHAIR_PID})"
 kill ${CHAIR_PID} || true
