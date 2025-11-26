@@ -1,7 +1,7 @@
 set -euo pipefail
 export PYTHONUNBUFFERED=1
 
-TEST_MODEL_NAME="dynamic_epsilon_baseline3"
+TEST_MODEL_NAME="cider_chair_reward_sentencelevel"
 
 MODEL_PATH=/share/liyilin-nfs/models/Qwen2.5-VL-3B-Instruct
 PORT=5000

@@ -46,7 +46,7 @@ def compute_score(reward_inputs: List[Dict[str, Any]]) -> List[Dict[str, float]]
     payload = []
     for i in range(len(cider_scores)):
         item = {
-            "overall": 1 - chair_scores[i], # cider_scores[i] - chair_scores[i]
+            "overall": cider_scores[i] - chair_scores[i],
             "CIDEr": cider_scores[i],
             "BLEU_1": bleu_1_scores[i],
             "BLEU_2": bleu_2_scores[i],

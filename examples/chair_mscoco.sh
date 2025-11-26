@@ -1,5 +1,5 @@
 # TODO: make this script more formal
-# NOTE: experiment_name
+# NOTE: experiment_name, reward_function
 #!/bin/bash
 
 # bash examples/chair_mscoco_test.sh
@@ -61,7 +61,7 @@ python3 -m verl.trainer.main \
     data.train_files=JustinLeeCEO/MSCOCO2014@train \
     data.val_files=JustinLeeCEO/MSCOCO2014@val \
     worker.actor.model.model_path=${MODEL_PATH} \
-    trainer.experiment_name=only_chair_reward \
+    trainer.experiment_name=cider_chair_reward_sentencelevel \
     trainer.n_gpus_per_node=8 \
     trainer.save_debug_path=null \
     worker.reward.reward_function=./examples/reward_function/cider_chair.py:compute_score
