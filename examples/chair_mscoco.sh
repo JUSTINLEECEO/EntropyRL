@@ -61,8 +61,8 @@ python3 -m verl.trainer.main \
     data.train_files=JustinLeeCEO/MSCOCO2014@train \
     data.val_files=JustinLeeCEO/MSCOCO2014@val \
     worker.actor.model.model_path=${MODEL_PATH} \
-    trainer.experiment_name=cider_chair_reward_sentencelevel \
-    trainer.n_gpus_per_node=8 \
+    trainer.experiment_name=test \
+    trainer.n_gpus_per_node=4 \
     trainer.save_debug_path=null \
     worker.reward.reward_function=./examples/reward_function/cider_chair.py:compute_score
 
