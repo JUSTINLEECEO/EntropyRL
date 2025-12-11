@@ -38,31 +38,28 @@ bash examples/chair_mscoco.sh
 
 EntropyRL builds upon the GRPO optimization target, introducing dynamic entropy modulation by replacing static clipping bounds with sample-specific bounds informed by hallucination metrics.
 
-### GRPO Objective
+### GRPO Objective 
 
 The GRPO objective is defined as:
-$$
-\begin{aligned}
-\mathcal{J}_{GRPO}(\theta) &= \mathbb{E}_{q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{old}}(O|q)} \\
-& \frac{1}{G} \sum_{i=1}^G \frac{1}{|o_i|} \sum_{t=1}^{|o_i|} \Bigg\{ \min \Bigg[ \frac{\pi_\theta(o_{i,t}|q,o_{i,<t})}{\pi_{\theta_{old}}(o_{i,t}|q,o_{i,<t})} \hat{A}_{i,t}, \\
-& \mathrm{clip} \Bigg( \frac{\pi_\theta(o_{i,t}|q,o_{i,<t})}{\pi_{\theta_{old}}(o_{i,t}|q,o_{i,<t})}, 1-\varepsilon, 1+\varepsilon \Bigg) \hat{A}_{i,t} \Bigg] - \beta \mathrm{D}_{KL}[\pi_\theta || \pi_{ref}] \Bigg\}
-\end{aligned}
-$$
+```math
+\begin{aligned}\mathcal{J}_{\mathrm{GRPO}}(\theta)&=\mathbb{E}_{(q,\alpha)\thicksim\mathcal{D},\{o_i\}_{i=1}^G\thicksim\pi_{\theta_{\mathrm{old}}}(\cdot|q)}\\&\left[\frac{1}{G}\sum_{i=1}^G\frac{1}{|o_i|}\sum_{t=1}^{|o_i|}\left(\min\left(r_{i,t}(\theta)\hat{A}_{i,t},\mathrm{clip}\left(r_{i,t}(\theta),1-\varepsilon,1+\varepsilon\right)\hat{A}_{i,t}\right)-\beta D_{\mathrm{KL}}(\pi_\theta||\pi_{\mathrm{ref}})\right)\right]\end{aligned}
+```
+in which $r_{i,t}(\theta)=\frac{\pi_\theta(o_{i,t}\mid q,o_{i,<t})}{\pi_{\theta_{\mathrm{old}}}(o_{i,t}\mid q,o_{i,<t})}$.
 
 ### Dynamic Clipping
 
 EntropyRL replaces the static $\varepsilon_{\mathrm{high}}$ with a dynamic, sample-specific value informed by the CHAIR metric:
-$$
-\mathrm{clip}\left(\frac{\pi_\theta(o_{i,t}|q,o_{i,<t})}{\pi_{\theta_{old}}(o_{i,t}|q,o_{i,<t})}, 1-\varepsilon_{\mathrm{low}}, 1+\varepsilon_{\mathrm{high},s}\right) \hat{A}_{i,t}
-$$
+```math
+\mathrm{clip}\left(r_{i,t}(\theta),1-\varepsilon_{\mathrm{low}},1+\varepsilon_{\mathrm{high},s}\right)\hat{A}_{i,t}
+```
 
 For example, $\varepsilon_{\mathrm{high},s}$ can be interpolated as:
-$$
+```math
 \varepsilon_{\mathrm{high},s} = \begin{cases}
 0.3, & \mathrm{CHAIR.i} < 10^{-4} \\
 0.5, & \mathrm{CHAIR.i} \ge 10^{-4}
 \end{cases}
-$$
+```
 
 ---
 
